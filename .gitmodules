@@ -1,0 +1,3 @@
+[submodule "usm"]
+	path = usm
+	url = git@github.com:jkflying/usm.git
