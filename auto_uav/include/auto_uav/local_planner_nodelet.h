@@ -15,6 +15,9 @@
 #include <std_msgs/Float64.h>
 #include <std_msgs/String.h>
 
+#include <Eigen/Core>
+#include <Eigen/Dense>
+
 #include "utils/avoidance_output.h"
 #include "utils/common.h"
 
@@ -43,6 +46,7 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
     void startNode();
 
     std::unique_ptr<WaypointGenerator> wp_generator_;
+    bool position_received_ = false;
 
    private:
     ros::NodeHandle nh_;
@@ -60,10 +64,43 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
     ros::Subscriber fcu_input_sub_;
     ros::Subscriber goal_topic_sub_;
 
+    bool new_goal_ = false;
+
+    Eigen::Vector3f newest_waypoint_position_;
+    Eigen::Vector3f last_waypoint_position_;
+    Eigen::Vector3f newest_adapted_waypoint_position_;
+    Eigen::Vector3f last_adapted_waypoint_position_;
+    Eigen::Vector3f newest_position_;
+    Eigen::Quaternionf newest_orientation_;
+    Eigen::Vector3f last_position_;
+    Eigen::Quaternionf last_orientation_;
+    Eigen::Vector3f velocity_;
+    Eigen::Vector3f desired_velocity_;
+    Eigen::Vector3f goal_position_;
+    Eigen::Vector3f prev_goal_position_;
+
     /**
      * @brief     reads parameters from launch file and yaml file
      **/
     void readParams();
+
+    /**
+  * @brief     callaback for vehicle position and orientation
+  * @param[in] msg, vehicle position and orientation in ENU frame
+  **/
+    void positionCallback(const geometry_msgs::PoseStamped& msg);
+
+    /**
+  * @brief     callaback for vehicle velocity
+  * @param[in] msg, vehicle velocity message
+  **/
+    void velocityCallback(const geometry_msgs::TwistStamped& msg);
+
+    /**
+  * @brief     callaback for vehicle state
+  * @param[in] msg, vehicle position and orientation in ENU frame
+  **/
+    void stateCallback(const mavros_msgs::State& msg);
 };
 
 }  // namespace avoidance
