@@ -2,6 +2,7 @@
 #define WAYPOINT_GENERATOR_H
 
 #include <ros/time.h>
+#include <ros/callback_queue.h>
 
 #include <Eigen/Dense>
 #include <mutex>

@@ -46,10 +46,16 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
     void startNode();
 
     std::unique_ptr<WaypointGenerator> wp_generator_;
+    std::unique_ptr<ros::AsyncSpinner> cmdloop_spinner_;
     bool position_received_ = false;
 
    private:
     ros::NodeHandle nh_;
+    ros::NodeHandle nh_private_;
+
+    ros::Timer cmdloop_timer_;
+    ros::CallbackQueue cmdloop_queue_;
+    double spin_dt_ = 0.1;
 
     // Publishers
     ros::Publisher mavros_pos_setpoint_pub_;
@@ -79,28 +85,56 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
     Eigen::Vector3f goal_position_;
     Eigen::Vector3f prev_goal_position_;
 
+    NavigationState nav_state_ = NavigationState::none;
+    bool armed_ = false;
+    bool hover_;
+
     /**
      * @brief     reads parameters from launch file and yaml file
      **/
     void readParams();
 
     /**
-  * @brief     callaback for vehicle position and orientation
-  * @param[in] msg, vehicle position and orientation in ENU frame
-  **/
+     * @brief     callaback for vehicle position and orientation
+     * @param[in] msg, vehicle position and orientation in ENU frame
+     **/
     void positionCallback(const geometry_msgs::PoseStamped& msg);
 
     /**
-  * @brief     callaback for vehicle velocity
-  * @param[in] msg, vehicle velocity message
-  **/
+     * @brief     callaback for vehicle velocity
+     * @param[in] msg, vehicle velocity message
+     **/
     void velocityCallback(const geometry_msgs::TwistStamped& msg);
 
     /**
-  * @brief     callaback for vehicle state
-  * @param[in] msg, vehicle position and orientation in ENU frame
-  **/
+     * @brief     callaback for vehicle state
+     * @param[in] msg, vehicle position and orientation in ENU frame
+     **/
     void stateCallback(const mavros_msgs::State& msg);
+    void cmdLoopCallback(const ros::TimerEvent& event);
+
+    /**
+     * @brief      calculates position and velocity setpoints and sends to the FCU
+     * @param[in]  hover, true if the vehicle is loitering
+     **/
+    void calculateWaypoints(bool hover);
+
+    /**
+     * @brief      set avoidance system status
+     **/
+    void setSystemStatus(MAV_STATE state);
+
+    /**
+     * @brief      check healthiness of the avoidance system to trigger failsafe in
+     *             the FCU
+     * @param[in]  since_last_cloud, time elapsed since the last waypoint was
+     *             published to the FCU
+     * @param[in]  since_start, time elapsed since staring the node
+     * @param[out] planner_is_healthy, true if the planner is running without
+     *errors
+     * @param[out] hover, true if the vehicle is hovering
+     **/
+    void checkFailsafe(ros::Duration since_last_cloud, ros::Duration since_start, bool& hover);
 };
 
 }  // namespace avoidance
