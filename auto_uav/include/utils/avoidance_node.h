@@ -6,6 +6,7 @@
 #include <mavros_msgs/WaypointList.h>
 
 #include <thread>
+#include <mutex>
 
 #include "mavros_msgs/CompanionProcessStatus.h"
 #include "ros/callback_queue.h"

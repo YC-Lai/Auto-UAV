@@ -1,25 +1,27 @@
 #include "auto_uav/local_planner_nodelet.h"
 
+#include <mutex>
+
 #include "auto_uav/waypoint_generator.h"
 
 namespace avoidance {
 
+LocalPlannerNodelet::LocalPlannerNodelet() : spin_dt_(0.1) {}
+
 void LocalPlannerNodelet::onInit() {
     NODELET_DEBUG("Initializing nodelet...");
     InitializeNodelet();
-
     startNode();
 }
 
 void LocalPlannerNodelet::InitializeNodelet() {
     nh_ = ros::NodeHandle("~");
+    nh_private_ = ros::NodeHandle("");
 
     wp_generator_.reset(new WaypointGenerator());
+    avoidance_node_.reset(new AvoidanceNode(nh_, nh_private_));
 
     readParams();
-
-    tf_listener_ =
-        new tf::TransformListener(ros::Duration(tf::Transformer::DEFAULT_CACHE_TIME), true);
 
     // initialize standard subscribers
     pose_sub_ = nh_.subscribe<const geometry_msgs::PoseStamped&>(
@@ -29,9 +31,7 @@ void LocalPlannerNodelet::InitializeNodelet() {
     state_sub_ = nh_.subscribe("/mavros/state", 1, &LocalPlannerNodelet::stateCallback, this);
     fcu_input_sub_ = nh_.subscribe("/mavros/trajectory/desired", 1,
                                    &LocalPlannerNodelet::fcuInputGoalCallback, this);
-    goal_topic_sub_ =
-        nh_.subscribe("/input/goal_position", 1, &LocalPlannerNodelet::updateGoalCallback, this);
-
+                                   
     mavros_vel_setpoint_pub_ =
         nh_.advertise<geometry_msgs::Twist>("/mavros/setpoint_velocity/cmd_vel_unstamped", 10);
     mavros_pos_setpoint_pub_ =
@@ -48,6 +48,8 @@ void LocalPlannerNodelet::startNode() {
 
     cmdloop_spinner_.reset(new ros::AsyncSpinner(1, &cmdloop_queue_));
     cmdloop_spinner_->start();
+
+    avoidance_node_->init();
 }
 
 void LocalPlannerNodelet::readParams() {
@@ -160,18 +162,6 @@ void LocalPlannerNodelet::calculateWaypoints(bool hover) {
     last_adapted_waypoint_position_ = newest_adapted_waypoint_position_;
     newest_adapted_waypoint_position_ = result.adapted_goto_position;
 
-    // visualize waypoint topics
-    visualizer_.visualizeWaypoints(result.goto_position, result.adapted_goto_position,
-                                   result.smoothed_goto_position);
-    visualizer_.publishPaths(last_position_, newest_position_, last_waypoint_position_,
-                             newest_waypoint_position_, last_adapted_waypoint_position_,
-                             newest_adapted_waypoint_position_);
-    visualizer_.publishCurrentSetpoint(
-        toTwist(result.linear_velocity_wp, result.angular_velocity_wp), result.waypoint_type,
-        newest_position_);
-
-    visualizer_.publishOfftrackPoints(closest_pt, deg60_pt);
-
     // send waypoints to mavros
     mavros_msgs::Trajectory obst_free_path = {};
     transformToTrajectory(obst_free_path, toPoseStamped(result.position_wp, result.orientation_wp),
@@ -203,14 +193,6 @@ void LocalPlannerNodelet::fcuInputGoalCallback(const mavros_msgs::Trajectory& ms
         }
         desired_yaw_setpoint_ = msg.point_2.yaw;
         desired_yaw_speed_setpoint_ = msg.point_2.yaw_rate;
-    }
-}
-
-void LocalPlannerNodelet::updateGoalCallback(const visualization_msgs::MarkerArray& msg) {
-    if (accept_goal_input_topic_ && msg.markers.size() > 0) {
-        prev_goal_position_ = goal_position_;
-        goal_position_ = toEigen(msg.markers[0].pose.position);
-        new_goal_ = true;
     }
 }
 

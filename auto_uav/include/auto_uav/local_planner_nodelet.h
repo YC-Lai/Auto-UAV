@@ -18,6 +18,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
+#include "utils/avoidance_node.h"
 #include "utils/avoidance_output.h"
 #include "utils/common.h"
 
@@ -47,6 +48,7 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
 
     std::unique_ptr<WaypointGenerator> wp_generator_;
     std::unique_ptr<ros::AsyncSpinner> cmdloop_spinner_;
+    std::unique_ptr<avoidance::AvoidanceNode> avoidance_node_;
     bool position_received_ = false;
 
    private:
@@ -72,6 +74,7 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
 
     bool new_goal_ = false;
 
+    std::mutex waypoints_mutex_;
     Eigen::Vector3f newest_waypoint_position_;
     Eigen::Vector3f last_waypoint_position_;
     Eigen::Vector3f newest_adapted_waypoint_position_;
@@ -88,6 +91,16 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
     NavigationState nav_state_ = NavigationState::none;
     bool armed_ = false;
     bool hover_;
+    bool accept_goal_input_topic_;
+    ros::Time start_time_;
+    ros::Time last_wp_time_;
+    bool is_land_waypoint_{false};
+    bool is_takeoff_waypoint_{false};
+    geometry_msgs::PoseStamped goal_mission_item_msg_;
+    mavros_msgs::Altitude ground_distance_msg_;
+
+    float desired_yaw_setpoint_{NAN};
+    float desired_yaw_speed_setpoint_{NAN};
 
     /**
      * @brief     reads parameters from launch file and yaml file
@@ -135,6 +148,12 @@ class LocalPlannerNodelet : public nodelet::Nodelet {
      * @param[out] hover, true if the vehicle is hovering
      **/
     void checkFailsafe(ros::Duration since_last_cloud, ros::Duration since_start, bool& hover);
+
+    /**
+     * @brief     callaback for setting the goal from the FCU Mission Waypoints
+     * @param[in] msg, current and next position goals
+     **/
+    void fcuInputGoalCallback(const mavros_msgs::Trajectory& msg);
 };
 
 }  // namespace avoidance
